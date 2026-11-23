@@ -202,11 +202,7 @@ class AdbPairingAccessibilityService : AccessibilityService() {
 
             val root = settingsRoot()
             if (root != null) {
-                val pairRow = if (isWatch) {
-                    findText(root, PAIR_CODE_TEXTS)
-                } else {
-                    findText(root, PAIR_CODE_TEXT)
-                }
+                val pairRow = findText(root, PAIR_CODE_TEXTS)
                 if (pairRow != null) {
                     if (clickRow(pairRow, PAIR_CODE_TARGET)) {
                         driveDone = true
@@ -215,7 +211,7 @@ class AdbPairingAccessibilityService : AccessibilityService() {
                 } else if (isWatch &&
                     (wirelessOpened ||
                         findTextAnywhere(root, PAIR_CODE_TEXTS) != null ||
-                        findTextAnywhere(root, PAIRED_DEVICES_TEXT) != null)
+                        findTextAnywhere(root, PAIRED_DEVICES_TEXTS) != null)
                 ) {
                     // The Wireless debugging page, where the pair row sits below the fold on a
                     // watch. Its own title says "Wireless debugging" too, so it must not be
@@ -225,7 +221,7 @@ class AdbPairingAccessibilityService : AccessibilityService() {
                     // Developer options. The title's clickable parent is the left side of
                     // the row; the switch beside it is a sibling, so this opens the screen
                     // rather than toggling wireless debugging.
-                    val wirelessRow = findText(root, WIRELESS_TEXT)
+                    val wirelessRow = findText(root, WIRELESS_TEXTS)
                     if (wirelessRow != null) {
                         if (clickRow(wirelessRow, WIRELESS_TARGET)) wirelessOpened = true
                     } else if (isWatch) {
@@ -344,9 +340,8 @@ class AdbPairingAccessibilityService : AccessibilityService() {
 
             // Match the dialog itself, not the wireless-debugging page behind it,
             // which also mentions pairing but shows a different (connect) port.
-            if (texts.none {
-                    it.contains("pairing code", ignoreCase = true) ||
-                        it.contains("pair with device", ignoreCase = true)
+            if (texts.none { text ->
+                    PAIRING_DIALOG_TEXTS.any { text.contains(it, ignoreCase = true) }
                 }
             ) continue
 
@@ -553,20 +548,53 @@ class AdbPairingAccessibilityService : AccessibilityService() {
         private const val READ_ATTEMPTS = 15
         private const val READ_INTERVAL_MS = 400L
 
-        /** The two rows between Developer options and the dialog, and how often to look. */
-        private const val WIRELESS_TEXT = "Wireless debugging"
-        private const val PAIR_CODE_TEXT = "Pair device with pairing code"
+        /**
+         * Labels of the two Settings rows that lead to the pairing dialog.
+         *
+         * The system Settings app shows these in the device language, while the reader that
+         * drives the rows used to know only the English strings. On a Chinese ROM the rows say
+         * 无线调试 / 使用配对码配对设备, so the drive never found them and automatic pairing
+         * stopped before the dialog was even open. Keep every language the app itself ships a
+         * translation for; an untranslated ROM still matches the English entries.
+         */
+        private val WIRELESS_TEXTS = setOf(
+            "Wireless debugging",
+            "无线调试",   // zh-CN
+            "無線偵錯",   // zh-TW
+        )
 
         /**
-         * What the pairing row is called. Phones say "Pair device with pairing code"; Wear OS
-         * says "Pair new device", and the drive has to know both or automatic pairing never
-         * leaves the Wireless debugging page on a watch.
+         * What the pairing row is called. Phones say "Pair device with pairing code", Wear OS
+         * says "Pair new device"; translated ROMs use their own label. The drive has to know
+         * all of them or automatic pairing never reaches the dialog.
          */
         private val PAIR_CODE_TEXTS = setOf(
-            PAIR_CODE_TEXT,
+            "Pair device with pairing code",
             "Pair new device",
+            "使用配对码配对设备",   // zh-CN
+            "使用配對碼配對裝置",   // zh-TW
         )
-        private const val PAIRED_DEVICES_TEXT = "Paired devices"
+
+        /** "Paired devices" on a watch, where the pair row sits below the fold. */
+        private val PAIRED_DEVICES_TEXTS = setOf(
+            "Paired devices",
+            "已配对的设备",   // zh-CN
+            "已配對的裝置",   // zh-TW
+        )
+
+        /**
+         * Words that mark a visible window as the system's pairing dialog.
+         *
+         * readPairingDialog() used to check for the English phrases only, so on a Chinese ROM
+         * the dialog was present but never recognised and the six-digit code was never read.
+         * Matching a few words instead of one exact sentence keeps this working across ROMs.
+         */
+        private val PAIRING_DIALOG_TEXTS = setOf(
+            "pairing code",
+            "pair with device",
+            "配对码",
+            "配對碼",
+        )
         private const val WIRELESS_TARGET = "wireless"
         private const val PAIR_CODE_TARGET = "pairing-code"
         private const val DRIVE_INITIAL_DELAY_MS = 800L
